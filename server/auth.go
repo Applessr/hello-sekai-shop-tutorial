@@ -17,5 +17,5 @@ func (s *server) authService() {
 
 	auth := s.app.Group("/auth_v1")
 
-	_ = auth
+	auth.GET("", s.healthCheckService)
 }
