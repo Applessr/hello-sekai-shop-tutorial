@@ -1,1 +1,23 @@
 package inventory
+
+import (
+	"github.com/Applessr/hello-sekai-shop-tutorial/modules/item"
+	"github.com/Applessr/hello-sekai-shop-tutorial/modules/models"
+)
+
+type (
+	UpdateInventoryReq struct {
+		PlayerId string `json:"player_id" validate:"required,max=64"`
+		ItemId   string `json:"item_id" validate:"required,max=64"`
+	}
+
+	ItemInInventory struct {
+		InventoryId string `json:"inventory_id"`
+		*item.ItemShowCase
+	}
+
+	PlayerInventory struct {
+		PLayerId string `json:"player_id"`
+		*models.PaginateRes
+	}
+)

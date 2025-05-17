@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/Applessr/hello-sekai-shop-tutorial/config"
-	database "github.com/Applessr/hello-sekai-shop-tutorial/pkg"
+	"github.com/Applessr/hello-sekai-shop-tutorial/pkg/database"
 	"github.com/Applessr/hello-sekai-shop-tutorial/server"
 )
 
