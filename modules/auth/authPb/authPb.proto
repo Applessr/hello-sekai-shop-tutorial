@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+option go_package = "github.com/Applessr/hello-sekai-shop-tutorial";
+
+message Empty {}
+
+message AccessTokenSearchReq {
+    string accessToken = 1;
+}
+
+message AccessTokenSearchRes {
+    bool isValid = 1;
+}
+
+message RolesCountReq {}
+
+message RolesCountRes {
+    int64 count = 1;
+}
+
+// Methods
+service AuthGrpcService {
+    rpc AccessTokenSearch(AccessTokenSearchReq) returns (AccessTokenSearchRes);
+    rpc RolesCount(RolesCountReq) returns (RolesCountRes);
+}

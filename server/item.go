@@ -1,9 +1,13 @@
 package server
 
 import (
+	"log"
+
 	"github.com/Applessr/hello-sekai-shop-tutorial/modules/item/itemHandler"
+	itemPb "github.com/Applessr/hello-sekai-shop-tutorial/modules/item/itemPb"
 	"github.com/Applessr/hello-sekai-shop-tutorial/modules/item/itemRepository"
 	"github.com/Applessr/hello-sekai-shop-tutorial/modules/item/itemUsecase"
+	"github.com/Applessr/hello-sekai-shop-tutorial/pkg/grpccon"
 )
 
 func (s *server) itemService() {
@@ -11,6 +15,15 @@ func (s *server) itemService() {
 	usecase := itemUsecase.NewItemUsecase(repo)
 	httpHandler := itemHandler.NewItemHttpHandler(s.cfg, usecase)
 	grpcHandler := itemHandler.NewItemGrpcHandler(usecase)
+
+	go func() {
+		grpcServer, lis := grpccon.NewGrpcServer(&s.cfg.Jwt, s.cfg.Grpc.ItemUrl)
+
+		itemPb.RegisterItemGrpcServiceServer(grpcServer, grpcHandler)
+
+		log.Printf("Item gRPC server listening on %s", s.cfg.Grpc.ItemUrl)
+		grpcServer.Serve(lis)
+	}()
 
 	_ = httpHandler
 	_ = grpcHandler
