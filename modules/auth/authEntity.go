@@ -22,4 +22,11 @@ type (
 		Title string             `json:"title" bson:"title"`
 		Code  int                `json:"code" bson:"code"`
 	}
+
+	UpdateRefreshTokenReq struct {
+		PlayerId     string    `json:"player_id" bson:"player_id"`
+		AccessToken  string    `json:"access_token" bson:"access_token"`
+		RefreshToken string    `json:"refresh_token" bson:"refresh_token"`
+		UpdatedAt    time.Time `json:"updated_at" bson:"updated_at"`
+	}
 )

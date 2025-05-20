@@ -17,7 +17,7 @@ type (
 	}
 
 	PlayerInventory struct {
-		PLayerId string `json:"player_id"`
+		PlayerId string `json:"player_id"`
 		*models.PaginateRes
 	}
 )

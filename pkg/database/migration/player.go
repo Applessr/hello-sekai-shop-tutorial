@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func playerDbConn(pctx context.Context, cfg *config.Config) *mongo.Database {
@@ -44,8 +45,11 @@ func PlayerMigrate(pctx context.Context, cfg *config.Config) {
 	documents := func() []any {
 		roles := []*player.Player{
 			{
-				Email:    "player001@mail.com",
-				Password: "123456",
+				Email: "player001@mail.com",
+				Password: func() string {
+					hash, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
+					return string(hash)
+				}(),
 				Username: "Player001",
 				PlayerRole: []player.PlayerRole{
 					{
@@ -57,8 +61,11 @@ func PlayerMigrate(pctx context.Context, cfg *config.Config) {
 				UpdatedAt: utils.LocalTime(),
 			},
 			{
-				Email:    "player002@mail.com",
-				Password: "123456",
+				Email: "player002@mail.com",
+				Password: func() string {
+					hash, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
+					return string(hash)
+				}(),
 				Username: "Player002",
 				PlayerRole: []player.PlayerRole{
 					{
@@ -70,8 +77,11 @@ func PlayerMigrate(pctx context.Context, cfg *config.Config) {
 				UpdatedAt: utils.LocalTime(),
 			},
 			{
-				Email:    "player003@mail.com",
-				Password: "123456",
+				Email: "player003@mail.com",
+				Password: func() string {
+					hash, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
+					return string(hash)
+				}(),
 				Username: "Player003",
 				PlayerRole: []player.PlayerRole{
 					{
@@ -83,8 +93,11 @@ func PlayerMigrate(pctx context.Context, cfg *config.Config) {
 				UpdatedAt: utils.LocalTime(),
 			},
 			{
-				Email:    "admin@mail.com",
-				Password: "123456",
+				Email: "admin@mail.com",
+				Password: func() string {
+					hash, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
+					return string(hash)
+				}(),
 				Username: "Admin1",
 				PlayerRole: []player.PlayerRole{
 					{

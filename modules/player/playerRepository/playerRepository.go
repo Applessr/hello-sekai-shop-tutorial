@@ -16,11 +16,13 @@ import (
 
 type (
 	PlayerRepositoryService interface {
-		IsUniquePLayer(pctx context.Context, email, username string) bool
+		IsUniquePlayer(pctx context.Context, email, username string) bool
 		InsertOnePlayer(pctx context.Context, req *player.Player) (primitive.ObjectID, error)
 		FindOnePlayerProfile(pctx context.Context, id string) (*player.PlayerProfileBson, error)
 		InsertOnePlayerTransaction(pctx context.Context, req *player.PlayerTransaction) error
 		GetPlayerSavingAccount(pctx context.Context, playerId string) (*player.PlayerSavingAccount, error)
+		FindOnePlayerCredential(pctx context.Context, email string) (*player.Player, error)
+		FindOnePlayerProfileToRefresh(pctx context.Context, playerId string) (*player.Player, error)
 	}
 
 	playerRepository struct {
@@ -36,7 +38,7 @@ func (r *playerRepository) playerDbConnect(pctx context.Context) *mongo.Database
 	return r.db.Database("player_db")
 }
 
-func (r *playerRepository) IsUniquePLayer(pctx context.Context, email, username string) bool {
+func (r *playerRepository) IsUniquePlayer(pctx context.Context, email, username string) bool {
 	ctx, cancel := context.WithTimeout(pctx, 10*time.Second)
 	defer cancel()
 
@@ -51,7 +53,7 @@ func (r *playerRepository) IsUniquePLayer(pctx context.Context, email, username 
 			{"email": email},
 		}},
 	).Decode(player); err != nil {
-		log.Printf("Error: IsUniquePLayer: %s", err.Error())
+		log.Printf("Error: IsUniquePlayer: %s", err.Error())
 		return true
 	}
 
@@ -157,6 +159,41 @@ func (r *playerRepository) GetPlayerSavingAccount(pctx context.Context, playerId
 			log.Printf("Error: GetPlayerSavingAccount: %s", err.Error())
 			return nil, errors.New("error: failed to get player saving account")
 		}
+	}
+
+	return result, nil
+}
+
+func (r *playerRepository) FindOnePlayerCredential(pctx context.Context, email string) (*player.Player, error) {
+	ctx, cancel := context.WithTimeout(pctx, 10*time.Second)
+	defer cancel()
+
+	db := r.playerDbConnect(ctx)
+	col := db.Collection("players")
+
+	result := new(player.Player)
+
+	if err := col.FindOne(ctx, bson.M{"email": email}).Decode(result); err != nil {
+		log.Printf("Error: FindOnePlayerCredential: %s", err.Error())
+		return nil, errors.New("error: find one player email not found")
+	}
+
+	return result, nil
+
+}
+
+func (r *playerRepository) FindOnePlayerProfileToRefresh(pctx context.Context, playerId string) (*player.Player, error) {
+	ctx, cancel := context.WithTimeout(pctx, 10*time.Second)
+	defer cancel()
+
+	db := r.playerDbConnect(ctx)
+	col := db.Collection("players")
+
+	result := new(player.Player)
+
+	if err := col.FindOne(ctx, bson.M{"_id": utils.ConvertToObjectId(playerId)}).Decode(result); err != nil && err != mongo.ErrNoDocuments {
+		log.Printf("Error: FindOnePlayerProfileToRefresh: %s", err.Error())
+		return nil, errors.New("error: find one player profile not found")
 	}
 
 	return result, nil
