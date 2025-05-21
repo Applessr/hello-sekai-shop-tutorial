@@ -8,6 +8,7 @@ import (
 
 	authPb "github.com/Applessr/hello-sekai-shop-tutorial/modules/auth/authPb"
 	"github.com/Applessr/hello-sekai-shop-tutorial/pkg/grpccon"
+	jwtAuth "github.com/Applessr/hello-sekai-shop-tutorial/pkg/jwtauth"
 )
 
 type (
@@ -27,6 +28,7 @@ func (r *middlewareRepository) AccessTokenSearch(pctx context.Context, grpcUrl, 
 	ctx, cancel := context.WithTimeout(pctx, 10*time.Second)
 	defer cancel()
 
+	jwtAuth.SetApiKeyInContext(&ctx)
 	conn, err := grpccon.NewGrpcClient(grpcUrl)
 	if err != nil {
 		log.Printf("Error: gRpc client connection failed: %s", err.Error())
@@ -56,6 +58,7 @@ func (r *middlewareRepository) RolesCount(pctx context.Context, grpcUrl string) 
 	ctx, cancel := context.WithTimeout(pctx, 10*time.Second)
 	defer cancel()
 
+	jwtAuth.SetApiKeyInContext(&ctx)
 	conn, err := grpccon.NewGrpcClient(grpcUrl)
 	if err != nil {
 		log.Printf("Error: gRpc client connection failed: %s", err.Error())

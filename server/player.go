@@ -26,7 +26,6 @@ func (s *server) playerService() {
 		grpcServer.Serve(lis)
 	}()
 
-	_ = grpcHandler
 	_ = queueHandler
 
 	player := s.app.Group("/player_v1")
@@ -34,8 +33,8 @@ func (s *server) playerService() {
 	player.GET("", s.healthCheckService)
 
 	player.GET("/player/:player_id", httpHandler.FindOnePlayerProfile)
-	player.GET("/player/account/:player_id", httpHandler.GetPlayerSavingAccount)
+	player.GET("/player/saving-account/my-account", httpHandler.GetPlayerSavingAccount, s.middleware.JwtAuthorization)
 
 	player.POST("/player/register", httpHandler.CreatePlayer)
-	player.POST("/player/add-money", httpHandler.AddPlayerMoney)
+	player.POST("/player/add-money", httpHandler.AddPlayerMoney, s.middleware.JwtAuthorization)
 }
