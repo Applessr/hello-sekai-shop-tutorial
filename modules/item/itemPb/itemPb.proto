@@ -3,7 +3,7 @@ syntax = "proto3";
 option go_package = "github.com/Applessr/hello-sekai-shop-tutorial";
 
 message FindItemInIdsReq {
-    repeated int32 ids = 1;
+    repeated string ids = 1;
 }
 
 message FindItemInIdsRes {

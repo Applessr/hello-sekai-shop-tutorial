@@ -2,22 +2,103 @@ package inventoryRepository
 
 import (
 	"context"
+	"errors"
+	"log"
+	"time"
 
+	"github.com/Applessr/hello-sekai-shop-tutorial/modules/inventory"
+	itemPb "github.com/Applessr/hello-sekai-shop-tutorial/modules/item/itemPb"
+	"github.com/Applessr/hello-sekai-shop-tutorial/pkg/grpccon"
+	jwtAuth "github.com/Applessr/hello-sekai-shop-tutorial/pkg/jwtauth"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type (
-	InventoryRepositoryService interface{}
+	InventoryRepositoryService interface {
+		FindItemInIds(pctx context.Context, grpcUrl string, req *itemPb.FindItemInIdsReq) (*itemPb.FindItemInIdsRes, error)
+		FindPlayerItems(pctx context.Context, filter primitive.D, opts []*options.FindOptions) ([]*inventory.Inventory, error)
+		CountPlayerItems(pctx context.Context, playerId string) (int64, error)
+	}
 
-	InventoryRepository struct {
+	inventoryRepository struct {
 		db *mongo.Client
 	}
 )
 
 func NewInventoryRepository(db *mongo.Client) InventoryRepositoryService {
-	return &InventoryRepository{db}
+	return &inventoryRepository{db}
 }
 
-func (r *InventoryRepository) inventoryDbConnect(pctx context.Context) *mongo.Database {
+func (r *inventoryRepository) inventoryDbConnect(pctx context.Context) *mongo.Database {
 	return r.db.Database("inventory_db")
+}
+
+func (r *inventoryRepository) FindItemInIds(pctx context.Context, grpcUrl string, req *itemPb.FindItemInIdsReq) (*itemPb.FindItemInIdsRes, error) {
+	ctx, cancel := context.WithTimeout(pctx, 30*time.Second)
+	defer cancel()
+
+	jwtAuth.SetApiKeyInContext(&ctx)
+	conn, err := grpccon.NewGrpcClient(grpcUrl)
+	if err != nil {
+		log.Printf("Error: gRpc client connection failed: %s", err.Error())
+		return nil, errors.New("error: gRpc client connection failed")
+	}
+
+	result, err := conn.Item().FindItemInIds(ctx, req)
+	if err != nil {
+		log.Printf("Error: FindItemInIds: %s", err.Error())
+		return nil, errors.New(err.Error())
+	}
+
+	if result == nil && len(result.Items) == 0 {
+		return nil, errors.New("error: item not found")
+	}
+
+	return result, nil
+}
+
+func (r *inventoryRepository) FindPlayerItems(pctx context.Context, filter primitive.D, opts []*options.FindOptions) ([]*inventory.Inventory, error) {
+	ctx, cancel := context.WithTimeout(pctx, 10*time.Second)
+	defer cancel()
+
+	db := r.inventoryDbConnect(ctx)
+	col := db.Collection("players_inventory")
+
+	cursors, err := col.Find(ctx, filter, opts...)
+	if err != nil {
+		log.Printf("Error: FindPlayerItems failed: %s", err.Error())
+		return nil, errors.New("error: player items not found")
+	}
+
+	results := make([]*inventory.Inventory, 0)
+	for cursors.Next(ctx) {
+		result := new(inventory.Inventory)
+		if err := cursors.Decode(result); err != nil {
+			log.Printf("Error: FindPlayerItems failed: %s", err.Error())
+			return nil, errors.New("error: player items not found")
+		}
+
+		results = append(results, result)
+	}
+
+	return results, nil
+}
+
+func (r *inventoryRepository) CountPlayerItems(pctx context.Context, playerId string) (int64, error) {
+	ctx, cancel := context.WithTimeout(pctx, 10*time.Second)
+	defer cancel()
+
+	db := r.inventoryDbConnect(ctx)
+	col := db.Collection("players_inventory")
+
+	count, err := col.CountDocuments(ctx, bson.M{"player_id": playerId})
+	if err != nil {
+		log.Printf("Error: CountPlayerItems failed: %s", err.Error())
+		return -1, errors.New("error: count player items failed")
+	}
+
+	return count, nil
 }
