@@ -25,10 +25,16 @@ func (s *server) itemService() {
 		grpcServer.Serve(lis)
 	}()
 
-	_ = httpHandler
 	_ = grpcHandler
 
 	item := s.app.Group("/item_v1")
 
 	item.GET("", s.healthCheckService)
+	item.GET("/item", httpHandler.FindManyItem)
+	item.GET("/item/:item_id", httpHandler.FindOneItem)
+
+	item.POST("/item", s.middleware.JwtAuthorization(s.middleware.RbacAuthorization(httpHandler.CreatedItem, []int{1, 0})))
+
+	item.PATCH("/item/:item_id", s.middleware.JwtAuthorization(s.middleware.RbacAuthorization(httpHandler.EditItem, []int{1, 0})))
+	item.PATCH("/item/:item_id/is-activated", s.middleware.JwtAuthorization(s.middleware.RbacAuthorization(httpHandler.EnableOrDisableItem, []int{1, 0})))
 }

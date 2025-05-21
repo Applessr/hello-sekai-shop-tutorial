@@ -11,15 +11,15 @@ type (
 	}
 
 	ItemShowCase struct {
-		ItemId string  `json:"item_id"`
-		Title  string  `json:"title"`
-		Price  float64 `json:"price"`
-		Damage int     `json:"damage"`
-		ImgUrl string  `json:"img_url"`
+		ItemId   string  `json:"item_id"`
+		Title    string  `json:"title"`
+		Price    float64 `json:"price"`
+		Damage   int     `json:"damage"`
+		ImageUrl string  `json:"image_url"`
 	}
 
 	ItemSearchReq struct {
-		Title string `json:"title"`
+		Title string `query:"title" validate:"max=64"`
 		models.PaginateReq
 	}
 
