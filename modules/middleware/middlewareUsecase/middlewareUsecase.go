@@ -2,6 +2,7 @@ package middlewareUsecase
 
 import (
 	"errors"
+	"log"
 
 	"github.com/Applessr/hello-sekai-shop-tutorial/config"
 	"github.com/Applessr/hello-sekai-shop-tutorial/modules/middleware/middlewareRepository"
@@ -14,6 +15,7 @@ type (
 	MiddlewareUsecaseService interface {
 		JwtAuthorization(c echo.Context, cfg *config.Config, accessToken string) (echo.Context, error)
 		RbacAuthorization(c echo.Context, cfg *config.Config, expected []int) (echo.Context, error)
+		PlayerIdParamValidation(c echo.Context) (echo.Context, error)
 	}
 
 	middlewareUsecase struct {
@@ -62,4 +64,21 @@ func (u *middlewareUsecase) RbacAuthorization(c echo.Context, cfg *config.Config
 	}
 
 	return nil, errors.New("error: permission denied")
+}
+
+func (u *middlewareUsecase) PlayerIdParamValidation(c echo.Context) (echo.Context, error) {
+	playerIdReq := c.Param("player_id")
+	playerIdToken := c.Get("player_id").(string)
+
+	if playerIdReq == "" || playerIdToken == "" {
+		log.Printf("Error: player id not found")
+		return nil, errors.New("error: player id not found")
+	}
+
+	if playerIdReq != playerIdToken {
+		log.Printf("Error: player id not match")
+		return nil, errors.New("error: player id not match")
+	}
+
+	return c, nil
 }
