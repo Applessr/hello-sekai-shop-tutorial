@@ -2,12 +2,16 @@ package playerRepository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"time"
 
+	"github.com/Applessr/hello-sekai-shop-tutorial/config"
 	"github.com/Applessr/hello-sekai-shop-tutorial/modules/models"
+	"github.com/Applessr/hello-sekai-shop-tutorial/modules/payment"
 	"github.com/Applessr/hello-sekai-shop-tutorial/modules/player"
+	"github.com/Applessr/hello-sekai-shop-tutorial/pkg/queue"
 	"github.com/Applessr/hello-sekai-shop-tutorial/pkg/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -22,10 +26,13 @@ type (
 		IsUniquePlayer(pctx context.Context, email, username string) bool
 		InsertOnePlayer(pctx context.Context, req *player.Player) (primitive.ObjectID, error)
 		FindOnePlayerProfile(pctx context.Context, id string) (*player.PlayerProfileBson, error)
-		InsertOnePlayerTransaction(pctx context.Context, req *player.PlayerTransaction) error
+		InsertOnePlayerTransaction(pctx context.Context, req *player.PlayerTransaction) (primitive.ObjectID, error)
 		GetPlayerSavingAccount(pctx context.Context, playerId string) (*player.PlayerSavingAccount, error)
 		FindOnePlayerCredential(pctx context.Context, email string) (*player.Player, error)
 		FindOnePlayerProfileToRefresh(pctx context.Context, playerId string) (*player.Player, error)
+		DeleteOnePlayerTransaction(pctx context.Context, transactionId string) error
+		DockedPlayerMoneyRes(pctx context.Context, cfg *config.Config, req *payment.PaymentTransferRes) error
+		AddPlayerMoneyRes(pctx context.Context, cfg *config.Config, req *payment.PaymentTransferRes) error
 	}
 
 	playerRepository struct {
@@ -138,7 +145,7 @@ func (r *playerRepository) FindOnePlayerProfile(pctx context.Context, id string)
 	return result, nil
 }
 
-func (r *playerRepository) InsertOnePlayerTransaction(pctx context.Context, req *player.PlayerTransaction) error {
+func (r *playerRepository) InsertOnePlayerTransaction(pctx context.Context, req *player.PlayerTransaction) (primitive.ObjectID, error) {
 	ctx, cancel := context.WithTimeout(pctx, 10*time.Second)
 	defer cancel()
 
@@ -148,9 +155,26 @@ func (r *playerRepository) InsertOnePlayerTransaction(pctx context.Context, req 
 	result, err := col.InsertOne(ctx, req)
 	if err != nil || result.InsertedID == nil {
 		log.Printf("Error: InsertOnePlayerTransaction: %s", err.Error())
-		return errors.New("error: Insert one player transaction failed")
+		return primitive.NilObjectID, errors.New("error: Insert one player transaction failed")
 	}
 	log.Printf("Success: InsertOnePlayerTransaction: %s", result.InsertedID)
+
+	return result.InsertedID.(primitive.ObjectID), nil
+}
+
+func (r *playerRepository) DeleteOnePlayerTransaction(pctx context.Context, transactionId string) error {
+	ctx, cancel := context.WithTimeout(pctx, 10*time.Second)
+	defer cancel()
+
+	db := r.playerDbConnect(ctx)
+	col := db.Collection("player_transactions")
+
+	result, err := col.DeleteOne(ctx, bson.M{"_id": utils.ConvertToObjectId(transactionId)})
+	if err != nil {
+		log.Printf("Error: DeleteOnePlayerTransaction: %s", err.Error())
+		return errors.New("error: delete one player transaction failed")
+	}
+	log.Printf("Delete result: %v", result)
 
 	return nil
 }
@@ -233,4 +257,48 @@ func (r *playerRepository) FindOnePlayerProfileToRefresh(pctx context.Context, p
 	}
 
 	return result, nil
+}
+
+func (r *playerRepository) DockedPlayerMoneyRes(pctx context.Context, cfg *config.Config, req *payment.PaymentTransferRes) error {
+	reqInBytes, err := json.Marshal(req)
+	if err != nil {
+		log.Printf("Error: DockedPlayerMoneyRes failed: %s", err.Error())
+		return errors.New("error: docked player money res failed")
+	}
+
+	if err := queue.PushMessageWithKeyToQueue(
+		[]string{cfg.Kafka.Url},
+		cfg.Kafka.ApiKey,
+		cfg.Kafka.Secret,
+		"payment",
+		"buy",
+		reqInBytes,
+	); err != nil {
+		log.Printf("Error: DockedPlayerMoneyRes failed: %s", err.Error())
+		return errors.New("error: docked player money res failed")
+	}
+
+	return nil
+}
+
+func (r *playerRepository) AddPlayerMoneyRes(pctx context.Context, cfg *config.Config, req *payment.PaymentTransferRes) error {
+	reqInBytes, err := json.Marshal(req)
+	if err != nil {
+		log.Printf("Error: AddPlayerMoneyRes failed: %s", err.Error())
+		return errors.New("error: docked player money res failed")
+	}
+
+	if err := queue.PushMessageWithKeyToQueue(
+		[]string{cfg.Kafka.Url},
+		cfg.Kafka.ApiKey,
+		cfg.Kafka.Secret,
+		"payment",
+		"sell",
+		reqInBytes,
+	); err != nil {
+		log.Printf("Error: AddPlayerMoneyRes failed: %s", err.Error())
+		return errors.New("error: docked player money res failed")
+	}
+
+	return nil
 }

@@ -2,15 +2,20 @@ package inventoryRepository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"time"
 
+	"github.com/Applessr/hello-sekai-shop-tutorial/config"
 	"github.com/Applessr/hello-sekai-shop-tutorial/modules/inventory"
 	itemPb "github.com/Applessr/hello-sekai-shop-tutorial/modules/item/itemPb"
 	"github.com/Applessr/hello-sekai-shop-tutorial/modules/models"
+	"github.com/Applessr/hello-sekai-shop-tutorial/modules/payment"
 	"github.com/Applessr/hello-sekai-shop-tutorial/pkg/grpccon"
 	jwtAuth "github.com/Applessr/hello-sekai-shop-tutorial/pkg/jwtauth"
+	"github.com/Applessr/hello-sekai-shop-tutorial/pkg/queue"
+	"github.com/Applessr/hello-sekai-shop-tutorial/pkg/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -24,6 +29,12 @@ type (
 		FindItemInIds(pctx context.Context, grpcUrl string, req *itemPb.FindItemInIdsReq) (*itemPb.FindItemInIdsRes, error)
 		FindPlayerItems(pctx context.Context, filter primitive.D, opts []*options.FindOptions) ([]*inventory.Inventory, error)
 		CountPlayerItems(pctx context.Context, playerId string) (int64, error)
+		AddPlayerItemRes(pctx context.Context, cfg *config.Config, req *payment.PaymentTransferRes) error
+		RemovePlayerItemRes(pctx context.Context, cfg *config.Config, req *payment.PaymentTransferRes) error
+		InsertOnePlayerItem(pctx context.Context, req *inventory.Inventory) (primitive.ObjectID, error)
+		DeleteOneInventory(pctx context.Context, inventoryId string) error
+		FindOnePlayerItem(pctx context.Context, playerId, itemId string) bool
+		DeleteOnePlayerItem(pctx context.Context, playerId, itemId string) error
 	}
 
 	inventoryRepository struct {
@@ -79,18 +90,29 @@ func (r *inventoryRepository) FindItemInIds(pctx context.Context, grpcUrl string
 	jwtAuth.SetApiKeyInContext(&ctx)
 	conn, err := grpccon.NewGrpcClient(grpcUrl)
 	if err != nil {
-		log.Printf("Error: gRpc client connection failed: %s", err.Error())
-		return nil, errors.New("error: gRpc client connection failed")
+		log.Printf("Error: gRPC connection failed: %s", err.Error())
+		return nil, errors.New("error: gRPC connection failed")
 	}
 
 	result, err := conn.Item().FindItemInIds(ctx, req)
 	if err != nil {
-		log.Printf("Error: FindItemInIds: %s", err.Error())
-		return nil, errors.New(err.Error())
+		log.Printf("Error: FindItemInIds failed: %s", err.Error())
+		return nil, errors.New("error: items not found")
 	}
 
-	if result == nil && len(result.Items) == 0 {
-		return nil, errors.New("error: item not found")
+	if result == nil {
+		log.Printf("Error: FindItemInIds failed: %s", err.Error())
+		return nil, errors.New("error: items not found")
+	}
+
+	if result.Items == nil {
+		log.Printf("Error: FindItemInIds failed: %s", err.Error())
+		return nil, errors.New("error: items not found")
+	}
+
+	if len(result.Items) == 0 {
+		log.Printf("Error: FindItemInIds failed: %s", err.Error())
+		return nil, errors.New("error: items not found")
 	}
 
 	return result, nil
@@ -137,4 +159,114 @@ func (r *inventoryRepository) CountPlayerItems(pctx context.Context, playerId st
 	}
 
 	return count, nil
+}
+
+func (r *inventoryRepository) InsertOnePlayerItem(pctx context.Context, req *inventory.Inventory) (primitive.ObjectID, error) {
+	ctx, cancel := context.WithTimeout(pctx, 10*time.Second)
+	defer cancel()
+
+	db := r.inventoryDbConnect(ctx)
+	col := db.Collection("players_inventory")
+
+	result, err := col.InsertOne(ctx, req)
+	if err != nil {
+		log.Printf("Error: InsertOnePlayerItem failed: %s", err.Error())
+		return primitive.NilObjectID, errors.New("error: insert player item failed")
+	}
+
+	return result.InsertedID.(primitive.ObjectID), nil
+}
+
+func (r *inventoryRepository) DeleteOneInventory(pctx context.Context, inventoryId string) error {
+	ctx, cancel := context.WithTimeout(pctx, 10*time.Second)
+	defer cancel()
+
+	db := r.inventoryDbConnect(ctx)
+	col := db.Collection("players_inventory")
+
+	result, err := col.DeleteOne(ctx, bson.M{"_id": utils.ConvertToObjectId(inventoryId)})
+	if err != nil {
+		log.Printf("Error: DeleteOneInventory failed: %s", err.Error())
+		return errors.New("error: delete one inventory failed")
+	}
+	log.Printf("DeleteOneInventory result: %v", result)
+
+	return nil
+}
+
+func (r *inventoryRepository) AddPlayerItemRes(pctx context.Context, cfg *config.Config, req *payment.PaymentTransferRes) error {
+	reqInBytes, err := json.Marshal(req)
+	if err != nil {
+		log.Printf("Error: AddPlayerItemRes failed: %s", err.Error())
+		return errors.New("error: docked player money res failed")
+	}
+
+	if err := queue.PushMessageWithKeyToQueue(
+		[]string{cfg.Kafka.Url},
+		cfg.Kafka.ApiKey,
+		cfg.Kafka.Secret,
+		"payment",
+		"buy",
+		reqInBytes,
+	); err != nil {
+		log.Printf("Error: AddPlayerItemRes failed: %s", err.Error())
+		return errors.New("error: docked player money res failed")
+	}
+
+	return nil
+}
+
+func (r *inventoryRepository) FindOnePlayerItem(pctx context.Context, playerId, itemId string) bool {
+	ctx, cancel := context.WithTimeout(pctx, 10*time.Second)
+	defer cancel()
+
+	db := r.inventoryDbConnect(ctx)
+	col := db.Collection("players_inventory")
+
+	result := new(inventory.Inventory)
+
+	if err := col.FindOne(ctx, bson.M{"player_id": playerId, "item_id": itemId}).Decode(result); err != nil {
+		log.Printf("Error: FindOnePlayerItem failed: %s", err.Error())
+		return false
+	}
+	return true
+}
+
+func (r *inventoryRepository) DeleteOnePlayerItem(pctx context.Context, playerId, itemId string) error {
+	ctx, cancel := context.WithTimeout(pctx, 10*time.Second)
+	defer cancel()
+
+	db := r.inventoryDbConnect(ctx)
+	col := db.Collection("players_inventory")
+
+	result, err := col.DeleteOne(ctx, bson.M{"player_id": playerId, "item_id": itemId})
+	if err != nil {
+		log.Printf("Error: DeleteOnePlayerItem failed: %s", err.Error())
+		return errors.New("error: delete one player item failed")
+	}
+	log.Printf("DeleteOnePlayerItem result: %v", result)
+
+	return nil
+}
+
+func (r *inventoryRepository) RemovePlayerItemRes(pctx context.Context, cfg *config.Config, req *payment.PaymentTransferRes) error {
+	reqInBytes, err := json.Marshal(req)
+	if err != nil {
+		log.Printf("Error: RemovePlayerItemRes failed: %s", err.Error())
+		return errors.New("error: docked player money res failed")
+	}
+
+	if err := queue.PushMessageWithKeyToQueue(
+		[]string{cfg.Kafka.Url},
+		cfg.Kafka.ApiKey,
+		cfg.Kafka.Secret,
+		"payment",
+		"sell",
+		reqInBytes,
+	); err != nil {
+		log.Printf("Error: RemovePlayerItemRes failed: %s", err.Error())
+		return errors.New("error: docked player money res failed")
+	}
+
+	return nil
 }

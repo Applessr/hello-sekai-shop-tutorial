@@ -10,6 +10,7 @@ import (
 	"github.com/Applessr/hello-sekai-shop-tutorial/modules/item"
 	itemPb "github.com/Applessr/hello-sekai-shop-tutorial/modules/item/itemPb"
 	"github.com/Applessr/hello-sekai-shop-tutorial/modules/models"
+	"github.com/Applessr/hello-sekai-shop-tutorial/modules/payment"
 	"github.com/Applessr/hello-sekai-shop-tutorial/pkg/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -20,6 +21,10 @@ type (
 		GetOffset(pctx context.Context) (int64, error)
 		UpserOffset(pctx context.Context, offset int64) error
 		FindPlayerItems(pctx context.Context, cfg *config.Config, playerId string, req *inventory.InventorySearchReq) (*models.PaginateRes, error)
+		AddPlayerItemRes(pctx context.Context, cfg *config.Config, req *inventory.UpdateInventoryReq)
+		RemovePlayerItemRes(pctx context.Context, cfg *config.Config, req *inventory.UpdateInventoryReq)
+		RollbackAddPlayerItem(pctx context.Context, cfg *config.Config, req *inventory.RollbackPlayerInventoryReq)
+		RollbackRemovePlayerItem(pctx context.Context, cfg *config.Config, req *inventory.RollbackPlayerInventoryReq)
 	}
 
 	inventoryUsecase struct {
@@ -128,4 +133,77 @@ func (u *inventoryUsecase) FindPlayerItems(pctx context.Context, cfg *config.Con
 			Href:  fmt.Sprintf("%s/%s?limit=%d&start=%s", cfg.Paginate.InventoryNextPageBasedUrl, playerId, req.Limit, results[len(results)-1].InventoryId),
 		},
 	}, nil
+}
+
+func (u *inventoryUsecase) AddPlayerItemRes(pctx context.Context, cfg *config.Config, req *inventory.UpdateInventoryReq) {
+	inventoryId, err := u.inventoryRepository.InsertOnePlayerItem(pctx, &inventory.Inventory{
+		PlayerId: req.PlayerId,
+		ItemId:   req.ItemId,
+	})
+	if err != nil {
+		u.inventoryRepository.AddPlayerItemRes(pctx, cfg, &payment.PaymentTransferRes{
+			InventoryId:   "",
+			TransactionId: "",
+			PlayerId:      req.PlayerId,
+			ItemId:        req.ItemId,
+			Amount:        0,
+			Error:         err.Error(),
+		})
+		return
+	}
+
+	u.inventoryRepository.AddPlayerItemRes(pctx, cfg, &payment.PaymentTransferRes{
+		InventoryId:   inventoryId.Hex(),
+		TransactionId: "",
+		PlayerId:      req.PlayerId,
+		ItemId:        req.ItemId,
+		Amount:        0,
+		Error:         "",
+	})
+}
+
+func (u *inventoryUsecase) RemovePlayerItemRes(pctx context.Context, cfg *config.Config, req *inventory.UpdateInventoryReq) {
+	if !u.inventoryRepository.FindOnePlayerItem(pctx, req.PlayerId, req.ItemId) {
+		u.inventoryRepository.RemovePlayerItemRes(pctx, cfg, &payment.PaymentTransferRes{
+			InventoryId:   "",
+			TransactionId: "",
+			PlayerId:      req.PlayerId,
+			ItemId:        req.ItemId,
+			Amount:        0,
+			Error:         "error: item not found",
+		})
+		return
+	}
+
+	if err := u.inventoryRepository.DeleteOnePlayerItem(pctx, req.PlayerId, req.ItemId); err != nil {
+		u.inventoryRepository.RemovePlayerItemRes(pctx, cfg, &payment.PaymentTransferRes{
+			InventoryId:   "",
+			TransactionId: "",
+			PlayerId:      req.PlayerId,
+			ItemId:        req.ItemId,
+			Amount:        0,
+			Error:         err.Error(),
+		})
+		return
+	}
+
+	u.inventoryRepository.RemovePlayerItemRes(pctx, cfg, &payment.PaymentTransferRes{
+		InventoryId:   "",
+		TransactionId: "",
+		PlayerId:      req.PlayerId,
+		ItemId:        req.ItemId,
+		Amount:        0,
+		Error:         "",
+	})
+}
+
+func (u *inventoryUsecase) RollbackAddPlayerItem(pctx context.Context, cfg *config.Config, req *inventory.RollbackPlayerInventoryReq) {
+	u.inventoryRepository.DeleteOneInventory(pctx, req.InventoryId)
+}
+
+func (u *inventoryUsecase) RollbackRemovePlayerItem(pctx context.Context, cfg *config.Config, req *inventory.RollbackPlayerInventoryReq) {
+	u.inventoryRepository.InsertOnePlayerItem(pctx, &inventory.Inventory{
+		PlayerId: req.PlayerId,
+		ItemId:   req.ItemId,
+	})
 }

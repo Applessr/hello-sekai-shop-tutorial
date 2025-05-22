@@ -12,7 +12,10 @@ func (s *server) inventoryService() {
 	httpHandler := inventoryHandler.NewInventoryHttpHandler(s.cfg, usecase)
 	queueHandler := inventoryHandler.NewInventoryQueueHandler(s.cfg, usecase)
 
-	_ = queueHandler
+	go queueHandler.AddPlayerItem()
+	go queueHandler.RollbackAddPlayerItem()
+	go queueHandler.RemovePlayerItem()
+	go queueHandler.RollbackRemovePlayerItem()
 
 	inventory := s.app.Group("/inventory_v1")
 
