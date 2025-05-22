@@ -8,7 +8,6 @@ import (
 
 	"github.com/Applessr/hello-sekai-shop-tutorial/config"
 	authPb "github.com/Applessr/hello-sekai-shop-tutorial/modules/auth/authPb"
-	inventoryPb "github.com/Applessr/hello-sekai-shop-tutorial/modules/inventory/inventoryPb"
 	itemPb "github.com/Applessr/hello-sekai-shop-tutorial/modules/item/itemPb"
 	playerPb "github.com/Applessr/hello-sekai-shop-tutorial/modules/player/playerPb"
 	jwtAuth "github.com/Applessr/hello-sekai-shop-tutorial/pkg/jwtauth"
@@ -20,7 +19,6 @@ import (
 type (
 	GrpcClientFactoryHandler interface {
 		Auth() authPb.AuthGrpcServiceClient
-		Inventory() inventoryPb.InventoryGrpcServiceClient
 		Item() itemPb.ItemGrpcServiceClient
 		Player() playerPb.PlayerGrpcServiceClient
 	}
@@ -64,10 +62,6 @@ func (g *grpcAuth) unaryAuthorization(ctx context.Context, req any, info *grpc.U
 
 func (g *grpcClientFactory) Auth() authPb.AuthGrpcServiceClient {
 	return authPb.NewAuthGrpcServiceClient(g.client)
-}
-
-func (g *grpcClientFactory) Inventory() inventoryPb.InventoryGrpcServiceClient {
-	return inventoryPb.NewInventoryGrpcServiceClient(g.client)
 }
 
 func (g *grpcClientFactory) Item() itemPb.ItemGrpcServiceClient {
